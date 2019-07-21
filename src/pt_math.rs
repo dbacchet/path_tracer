@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub, Mul};
+use std::ops::{Add, Sub, Mul, Div, Neg};
 
 #[derive(Clone,Copy,Debug)]
 pub struct Vec3 {
@@ -10,6 +10,10 @@ pub struct Vec3 {
 impl Vec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Vec3 {
         Vec3 {x: x, y: y, z: z}
+    }
+
+    pub fn squared_length(&self) -> f32 {
+        self.x*self.x + self.y*self.y + self.z*self.z
     }
 
     pub fn length(&self) -> f32 {
@@ -48,17 +52,69 @@ impl Mul<f32> for Vec3 {
     }
 }
 
-// finctions working on Vec2 
+impl Mul<Vec3> for f32 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: Vec3) -> Vec3 {
+        Vec3 { x: rhs.x * self,
+               y: rhs.y * self,
+               z: rhs.z * self,
+        }
+    }
+}
+
+impl Div<f32> for Vec3 {
+    type Output = Vec3;
+
+    fn div(self, rhs: f32) -> Vec3 {
+        Vec3 { x: self.x / rhs,
+               y: self.y / rhs,
+               z: self.z / rhs,
+        }
+    }
+}
+
+impl Div<Vec3> for f32 {
+    type Output = Vec3;
+
+    fn div(self, rhs: Vec3) -> Vec3 {
+        Vec3 { x: rhs.x / self,
+               y: rhs.y / self,
+               z: rhs.z / self,
+        }
+    }
+}
+
+impl Neg for Vec3 {
+    type Output = Vec3;
+
+    fn neg(self) -> Self::Output {
+        Vec3 { x: -self.x,
+               y: -self.y,
+               z: -self.z,
+        }
+    }
+}
+
+// finctions working on Vec3 
 
 pub fn unit_vector(v: &Vec3) -> Vec3 {
     let len = v.length();
     Vec3 {x: v.x/len,
           y: v.y/len,
-          z: v.z/len}
+          z: v.z/len
+    }
 }
 
 pub fn dot(v1: Vec3, v2: Vec3) -> f32 {
     v1.x*v2.x + v1.y*v2.y + v1.z*v2.z
+}
+
+pub fn mul_component(v1: Vec3, v2: Vec3) -> Vec3 {
+    Vec3 { x: v1.x*v2.x,
+           y: v1.y*v2.y,
+           z: v1.z*v2.z,
+    }
 }
 
 // Ray in 3D space

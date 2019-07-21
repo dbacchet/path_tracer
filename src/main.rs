@@ -1,9 +1,18 @@
-extern crate png;
-
+// extern crate png;
+//
 mod pt_math;
-use pt_math::Vec3;
-use pt_math::Ray;
-// use pt_math::*;
+use pt_math::{Vec3, Ray, mul_component};
+
+mod objects;
+use objects::{Hitable, Sphere, HitableList};
+
+mod camera;
+use camera::Camera;
+
+mod material;
+use material::{Lambertian, Metal, Dielectric};
+
+use rand::Rng;
 
 struct Image {
     width: u32,
@@ -46,46 +55,64 @@ impl Image {
     }
 }
 
-fn hit_sphere(center: Vec3, radius: f32, ray: Ray) -> bool {
-    let oc = ray.origin - center;
-    let a = pt_math::dot(ray.direction, ray.direction);
-    let b = 2.0 * pt_math::dot(oc, ray.direction);
-    let c = pt_math::dot(oc, oc) - radius*radius;
-    let discriminant = b*b - 4.0*a*c;
-    return discriminant > 0.0;
-}
-
-fn color(ray: Ray) -> Vec3 {
-    if hit_sphere(Vec3::new(0.0,0.0,-1.0), 0.5, ray) {
-        return Vec3::new(1.0,0.0,0.0);
+fn color<T: Hitable>(ray: Ray, world: &T, depth: i32) -> Vec3 {
+    const MIN_DIST : f32 = 0.0001; //10.0 * std::f32::MIN_POSITIVE;
+    const MAX_ITX: i32 = 50;
+    let max_dist = 1000000.0;
+    if let Some(hitrecord) = world.hit(&ray, MIN_DIST, max_dist) {
+        if depth >= MAX_ITX {
+            return Vec3::new(0.0,0.0,0.0);
+        }
+        if let Some(scatter) = hitrecord.material.scatter(ray, hitrecord.point, hitrecord.normal) {
+            return mul_component(scatter.color, color(scatter.ray, world, depth+1));
+        } else {
+            return Vec3::new(0.0,0.0,0.0);
+        }
+    } else {
+        let unit_dir = pt_math::unit_vector(&ray.direction);
+        let t = 0.5 * (unit_dir.y + 1.0);
+        Vec3::new(1.0,1.0,1.0)*(1.0-t) + Vec3::new(0.5,0.7,1.0)*t
     }
-    let unit_dir = pt_math::unit_vector(&ray.direction);
-    let t = 0.5 * (unit_dir.y + 1.0);
-    Vec3::new(1.0,1.0,1.0)*(1.0-t) + Vec3::new(0.5,0.7,1.0)*t
 }
 
 fn main() {
-    println!("hello world!");
+    println!("sample path tracing. Rendering scene...");
     // image and camera data
-    let width = 200;
-    let height = 100;
+    let width = 400;
+    let height = 200;
+    let samples = 100;
+    // let width = 1280;
+    // let height = 640;
     let mut image = Image::new(width, height);
-    let lower_left_corner = Vec3::new(-2.0, -1.0, -1.0);
-    let horizontal = Vec3::new(4.0, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, 2.0, 0.0);
-    let origin = Vec3::new(0.0, 0.0, 0.0);
+    let camera = Camera::new();
+    // create scene
+    let mut world = HitableList::new();
+    world.add(Sphere::new(Vec3::new(0.0,0.0,-1.0), 0.5, Box::new(Lambertian::new(Vec3::new(0.8,0.3,0.3)))));
+    world.add(Sphere::new(Vec3::new(0.0,-100.5,-1.0), 100.0, Box::new(Lambertian::new(Vec3::new(0.8,0.8,0.0)))));
+    world.add(Sphere::new(Vec3::new(1.0,0.0,-1.0), 0.5, Box::new(Metal::new(Vec3::new(0.8,0.6,0.2), 0.1))));
+    world.add(Sphere::new(Vec3::new(-1.0,0.0,-1.0), 0.5, Box::new(Dielectric::new(1.1, 0.0))));
+    world.add(Sphere::new(Vec3::new(-1.0,0.0,-1.0), -0.45, Box::new(Dielectric::new(1.1, 0.0))));
+    // world.add(Sphere::new(Vec3::new(-1.0,0.0,-1.0), 0.5, Box::new(Metal::new(Vec3::new(0.8,0.8,0.8), 0.5))));
+    world.add(Sphere::new(Vec3::new(-1.0,0.5,-1.0), 0.15, Box::new(Metal::new(Vec3::new(0.1,0.1,0.1), 0.0))));
     // fill image
+    let mut rng = rand::thread_rng();
     for j in 0..height {
         for i in 0..width {
-            let u = (i as f32) / (width as f32);
-            let v = (j as f32) / (height as f32);
-            let ray = Ray::new(origin, lower_left_corner + horizontal*u + vertical*v);
-            let col = color(ray);
+            let mut col = Vec3::new(0.0,0.0,0.0);
+            for _s in 0..samples {
+                let u = (i as f32 + rng.gen::<f32>()) / (width as f32);
+                let v = (j as f32 + rng.gen::<f32>()) / (height as f32);
+                let ray = camera.get_ray(u,v);
+                col = col + color(ray, &world, 0);
+            }
+            col = col / samples as f32;
+            // gamma correct using "gamma 2"
+            let col = Vec3::new(col.x.sqrt(), col.y.sqrt(), col.z.sqrt());
             image.data[(j*width+i) as usize] = col;
         }
     }
-    // image.data[150] = Vec3::new(1.0,0.0,0.0);
-    // image.data[340] = Vec3::new(1.0,1.0,0.0);
+    println!("...Done!");
+    // save image to file
     image.save("ciccio.png");
 }
 
