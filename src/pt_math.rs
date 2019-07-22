@@ -98,7 +98,7 @@ impl Neg for Vec3 {
 
 // finctions working on Vec3 
 
-pub fn unit_vector(v: &Vec3) -> Vec3 {
+pub fn unit_vector(v: Vec3) -> Vec3 {
     let len = v.length();
     Vec3 {x: v.x/len,
           y: v.y/len,
@@ -108,6 +108,13 @@ pub fn unit_vector(v: &Vec3) -> Vec3 {
 
 pub fn dot(v1: Vec3, v2: Vec3) -> f32 {
     v1.x*v2.x + v1.y*v2.y + v1.z*v2.z
+}
+
+pub fn cross(v1: Vec3, v2: Vec3) -> Vec3 {
+    Vec3 { x: v1.y*v2.z - v1.z*v2.y,
+           y: v1.z*v2.x - v1.x*v2.z,
+           z: v1.x*v2.y - v1.y*v2.x,
+    }
 }
 
 pub fn mul_component(v1: Vec3, v2: Vec3) -> Vec3 {
@@ -159,14 +166,26 @@ mod tests {
     }
 
     use super::unit_vector;
+    use super::cross;
 
     #[test]
     fn vec3_functions() {
         let v1 = Vec3::new(3.0,0.0,0.0);
-        let v2 = unit_vector(&v1);
+        let v2 = unit_vector(v1);
         assert_eq!(v2.x, 1.0);
         assert_eq!(v2.y, 0.0);
         assert_eq!(v2.z, 0.0);
+        let v1 = Vec3::new(1.0,0.0,0.0);
+        let v2 = Vec3::new(0.0,1.0,0.0);
+        let v3 = cross(v1, v2);
+        assert_eq!(v3.x, 0.0);
+        assert_eq!(v3.y, 0.0);
+        assert_eq!(v3.z, 1.0);
+        let v3 = cross(v2, v1);
+        assert_eq!(v3.x, 0.0);
+        assert_eq!(v3.y, 0.0);
+        assert_eq!(v3.z, -1.0);
+
     }
 
     #[test]

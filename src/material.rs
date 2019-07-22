@@ -55,7 +55,7 @@ impl Metal {
 
 impl Material for Metal {
     fn scatter(&self, ray_in: Ray, hit_point: Vec3, hit_normal: Vec3) -> Option<Scatter> {
-        let reflected_dir = reflect(unit_vector(&ray_in.direction), hit_normal) + self.fuzz*random_in_unit_sphere();
+        let reflected_dir = reflect(unit_vector(ray_in.direction), hit_normal) + self.fuzz*random_in_unit_sphere();
         if dot(reflected_dir, hit_normal)>0.0 {
             return Some( Scatter::new( Ray::new(hit_point, reflected_dir), self.albedo ));
         }
@@ -92,7 +92,7 @@ impl Material for Dielectric {
             cosine = -dn_dot / ray_dir_len;
         }
         // calc reflected/refracted ray
-        let reflected_dir = reflect(unit_vector(&ray_in.direction), hit_normal) + self.fuzz*random_in_unit_sphere();
+        let reflected_dir = reflect(unit_vector(ray_in.direction), hit_normal) + self.fuzz*random_in_unit_sphere();
         if let Some(refracted_dir) = refract(ray_in.direction, outward_normal, ni_over_nt) {
             let reflect_prob = schlick(cosine, self.refraction_index);
             let mut rng = rand::thread_rng();
@@ -114,7 +114,7 @@ fn reflect(v: Vec3, n: Vec3) -> Vec3 {
 }
 
 fn refract(v: Vec3, n: Vec3, ni_over_nt: f32) -> Option<Vec3> {
-    let u = unit_vector(&v);
+    let u = unit_vector(v);
     let dt = dot(u, n);
     let discriminant = 1.0- ni_over_nt*ni_over_nt*(1.0-dt*dt);
     if discriminant>0.0 {
