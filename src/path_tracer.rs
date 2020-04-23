@@ -33,36 +33,44 @@ impl Image {
         encoder.set_color(png::ColorType::RGB);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header().unwrap();
-        // image data rows start from top. need to swap lines
+        // image data rows start from top
         let mut raw_data: Vec<u8> = vec![0; (self.width*self.height*3) as usize];
         for i in 0..self.data.len() {
             let row = i as u32 / self.width;
             let col = i as u32 % self.width;
-            let idx = (self.height-row-1)*self.width + col;
-            let idx = idx as usize;
-            let v = self.val(i);
-            raw_data[3*idx+0] = (v.x*255.99) as u8;
-            raw_data[3*idx+1] = (v.y*255.99) as u8;
-            raw_data[3*idx+2] = (v.z*255.99) as u8;
+            // let idx = (self.height-row-1)*self.width + col;
+            // let idx = idx as usize;
+            let v = self.val_rgb(col, row);
+            raw_data[3*i+0] = v.0;
+            raw_data[3*i+1] = v.1;
+            raw_data[3*i+2] = v.2;
         }
         writer.write_image_data(&raw_data).unwrap(); // Save
     }
     
-    pub fn val(&self, i: usize) -> Vec3 {
-        let col = self.data[i]/(self.samples as f32);
+    pub fn val(&self, i: u32, j: u32) -> Vec3 {
+        let idx = (j*self.width + i) as usize;
+        self.data[idx]/(self.samples as f32)
+    }
+
+    pub fn val_gamma_corrected(&self, i: u32, j: u32) -> Vec3 {
+        let col = self.val(i,j);
         // gamma correct using "gamma 2"
         Vec3::new(col.x.sqrt(), col.y.sqrt(), col.z.sqrt())
     }
 
+
     pub fn val_rgb(&self, i: u32, j: u32) -> (u8, u8, u8) {
-        let idx = ((self.height-j-1)*self.width + i) as usize;
-        let v = self.val(idx);
+        let v = self.val_gamma_corrected(i,j);
         let r = (v.x*255.99) as u8;
         let g = (v.y*255.99) as u8;
         let b = (v.z*255.99) as u8;
         (r,g,b)
-        // let rgba: u32 = 0xff << 24 | r << 16 | g << 8 | b;
-        // return rgba;
+    }
+
+    pub fn accumulate(&mut self, i: u32, j: u32, col: Vec3) {
+        let idx = (j*self.width + i) as usize;
+        self.data[idx] = self.data[idx] + col;
     }
 }
 
@@ -148,12 +156,10 @@ pub fn render_step(world: &HitableList, camera: &Camera, image: &mut Image) {
     for j in 0..image.height {
         for i in 0..image.width {
             let u = (i as f32 + rng.gen::<f32>()) / (image.width as f32);
-            let v = (j as f32 + rng.gen::<f32>()) / (image.height as f32);
+            let v = ((image.height-j-1) as f32 + rng.gen::<f32>()) / (image.height as f32);
             let ray = camera.get_ray(u,v);
-            let mut col = Vec3::new(0.0,0.0,0.0);
-            col = col + color(ray, world, 0);
             // accumulate color in the image data
-            image.data[(j*image.width+i) as usize] = image.data[(j*image.width+i) as usize] + col;
+            image.accumulate(i,j,color(ray, world, 0));
         }
     }
     image.samples += 1;

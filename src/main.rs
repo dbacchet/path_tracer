@@ -15,6 +15,9 @@ use minifb::{Key, WindowOptions, Window};
 extern crate indicatif;
 use indicatif::ProgressBar;
 
+use std::sync::{Arc, Mutex};
+use std::thread;
+
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
     print!("{}", opts.usage(&brief));
@@ -48,13 +51,13 @@ fn main() {
     let samples = matches.opt_get_default::<u32>("s", 10).expect("invalid number of samples");
     println!("sample path tracing. Rendering scene...");
     // create empty image
-    let mut image = Image::new(width, height);
+    let final_image = Arc::new(Mutex::new(Image::new(width, height)));
     // camera
     let aperture = 0.051;
     let lookfrom = Vec3::new(10.0, 1.8, 2.4);
     let lookat = Vec3::new(0.0, 0.0, 0.5);
     let up = Vec3::new(0.0,1.0,0.0); 
-    let dist_to_focus = (lookfrom-Vec3::new(4.0, 1.0, 0.0)).length();
+    let dist_to_focus = (lookfrom-lookat).length();
     let camera = Camera::new(lookfrom, lookat, up, 
                              30.0, (width as f32)/(height as f32),
                              aperture, dist_to_focus);
@@ -73,25 +76,81 @@ fn main() {
                   .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} ({eta} rem.)")
                   .progress_chars("##-"));
     // render image and update  window
-    for _s in 0..samples {
-        if window.is_open() && !window.is_key_down(Key::Escape) {
-            render_step(&world, &camera, &mut image);
-            // update framebuffer
-            for j in 0..image.height {
-                for i in 0..image.width {
-                    let (r,g,b) = image.val_rgb(i,j);
-                    let rgb: u32 = 0xff << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32;
-                    buffer[(i+j*image.width) as usize] = rgb;
+    let num_threads = 24;
+    let samples_per_thread = samples / num_threads;
+    let mut thread_handles = Vec::new();
+    for _tid in 0..num_threads {
+        let final_image = final_image.clone();
+    let camera = Camera::new(lookfrom, lookat, up, 
+                             30.0, (width as f32)/(height as f32),
+                             aperture, dist_to_focus);
+    // create scene
+    let world = create_book_scene();
+        let t = thread::spawn(move || {
+            let w = width;
+            let h = height;
+            for _s in 0..samples_per_thread {
+                let mut image = Image::new(w, h);
+                render_step(&world, &camera, &mut image);
+                let mut final_image = final_image.lock().unwrap();
+                for j in 0..image.height {
+                    for i in 0..image.width {
+                        final_image.accumulate(i,j,image.val(i,j));
+                    }
                 }
+                final_image.samples +=1;
             }
-            window.update_with_buffer(&buffer).unwrap();
+        });
+        thread_handles.push(t);
+    }
+    if false {
+        // single threaded
+        let mut image = Image::new(width, height);
+        for _s in 0..samples {
+            if window.is_open() && !window.is_key_down(Key::Escape) {
+                render_step(&world, &camera, &mut image);
+                // update framebuffer
+                for j in 0..image.height {
+                    for i in 0..image.width {
+                        let (r,g,b) = image.val_rgb(i,j);
+                        let rgb: u32 = 0xff << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32;
+                        buffer[(i+j*image.width) as usize] = rgb;
+                    }
+                }
+                window.update_with_buffer(&buffer).unwrap();
+            }
+            bar.inc(1);
         }
-        bar.inc(1);
+        bar.finish();
+
+        println!("...Done!");
+        image.save(&output_filename);
+    }
+
+    loop {
+        thread::sleep(std::time::Duration::from_secs(1));
+        let final_image = final_image.lock().unwrap();
+        // update framebuffer
+        for j in 0..final_image.height {
+            for i in 0..final_image.width {
+                let (r,g,b) = final_image.val_rgb(i,j);
+                let rgb: u32 = 0xff << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32;
+                buffer[(i+j*final_image.width) as usize] = rgb;
+            }
+        }
+        window.update_with_buffer(&buffer).unwrap();
+        bar.set_position(final_image.samples as u64);
+        if final_image.samples>=samples_per_thread*num_threads-1 {
+            break;
+        }
     }
     bar.finish();
+    for t in thread_handles {
+        t.join().unwrap();
+    }
 
     println!("...Done!");
     // save image to file
-    image.save(&output_filename);
+    final_image.lock().unwrap().save(&output_filename);
 }
 

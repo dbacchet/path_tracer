@@ -21,11 +21,11 @@ pub trait Hitable {
 pub struct Sphere {
     center: Vec3,
     radius: f32,
-    material: Box<dyn Material>,
+    material: Box<dyn Material + Send + Sync>,
 }
 
 impl Sphere {
-    pub fn new(center: Vec3, radius: f32, material: Box<dyn Material>) -> Sphere {
+    pub fn new(center: Vec3, radius: f32, material: Box<dyn Material + Send + Sync>) -> Sphere {
         Sphere {center, radius, material}
     }
 }
