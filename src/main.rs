@@ -33,6 +33,7 @@ fn main() {
     opts.optopt("w", "width", "image width (default=640)", "");
     opts.optopt("h", "height", "image height (default=360)", "");
     opts.optopt("s", "samples", "number of samples (default=10)", "");
+    opts.optopt("t", "threads", "number of threads (default=8)", "");
     opts.optflag("", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
@@ -49,6 +50,7 @@ fn main() {
     let width = matches.opt_get_default::<u32>("w", 640).expect("invalid width");
     let height = matches.opt_get_default::<u32>("h", 360).expect("invalid heigh");
     let samples = matches.opt_get_default::<u32>("s", 10).expect("invalid number of samples");
+    let num_threads = matches.opt_get_default::<u32>("t", 8).expect("invalid number of threads");
     println!("sample path tracing. Rendering scene...");
     // create empty image
     let final_image = Arc::new(Mutex::new(Image::new(width, height)));
@@ -76,7 +78,7 @@ fn main() {
                   .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} ({eta} rem.)")
                   .progress_chars("##-"));
     // render image and update  window
-    let num_threads = 24;
+    // let num_threads = 24;
     let samples_per_thread = samples / num_threads;
     let mut thread_handles = Vec::new();
     for _tid in 0..num_threads {
