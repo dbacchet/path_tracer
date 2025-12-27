@@ -158,3 +158,236 @@ pub fn render_step(world: &HitableList, camera: &Camera, image: &mut Image) {
     }
     image.samples += 1;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx_eq(a: f32, b: f32, epsilon: f32) -> bool {
+        (a - b).abs() < epsilon
+    }
+
+    #[test]
+    fn image_creation() {
+        let width = 100;
+        let height = 50;
+        let image = Image::new(width, height);
+        
+        assert_eq!(image.width, 100);
+        assert_eq!(image.height, 50);
+        assert_eq!(image.data.len(), 5000);
+        assert_eq!(image.samples, 0);
+        
+        // All pixels should be initialized to black
+        for pixel in &image.data {
+            assert_eq!(pixel.x, 0.0);
+            assert_eq!(pixel.y, 0.0);
+            assert_eq!(pixel.z, 0.0);
+        }
+    }
+
+    #[test]
+    fn image_val() {
+        let mut image = Image::new(10, 10);
+        
+        // Set a pixel value
+        image.data[0] = Vec3::new(4.0, 9.0, 16.0);
+        image.samples = 1;
+        
+        let val = image.val(0);
+        
+        // Should apply gamma correction (sqrt)
+        assert_eq!(val.x, 2.0);
+        assert_eq!(val.y, 3.0);
+        assert_eq!(val.z, 4.0);
+    }
+
+    #[test]
+    fn image_val_with_samples() {
+        let mut image = Image::new(10, 10);
+        
+        // Simulate multiple samples
+        image.data[0] = Vec3::new(4.0, 4.0, 4.0);
+        image.samples = 4;
+        
+        let val = image.val(0);
+        
+        // Should divide by samples, then sqrt
+        // 4.0/4.0 = 1.0, sqrt(1.0) = 1.0
+        assert_eq!(val.x, 1.0);
+        assert_eq!(val.y, 1.0);
+        assert_eq!(val.z, 1.0);
+    }
+
+    #[test]
+    fn image_val_rgb() {
+        let mut image = Image::new(10, 10);
+        
+        // Set a pixel at data index 0 (bottom-left in storage)
+        // val_rgb(i, j) accesses data at index (height-j-1)*width + i
+        // So val_rgb(5, 9) accesses (10-9-1)*10 + 5 = 0*10 + 5 = 5
+        image.data[5] = Vec3::new(1.0, 0.25, 0.0625); // After gamma: sqrt gives 1.0, 0.5, 0.25
+        image.samples = 1;
+        
+        let (r, g, b) = image.val_rgb(5, 9);
+        
+        // After gamma correction and conversion to 0-255
+        assert_eq!(r, 255);
+        assert!(g > 125 && g < 130); // sqrt(0.25) ≈ 0.5 → ~127-128
+        assert!(b > 60 && b < 70); // sqrt(0.0625) = 0.25 → ~63-64
+    }
+
+    #[test]
+    fn color_miss_returns_sky() {
+        let world = HitableList::new(); // Empty world
+        let ray = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
+        
+        let col = color(ray, &world, 0);
+        
+        // Should return sky gradient (blue-white)
+        assert!(col.x >= 0.5 && col.x <= 1.0);
+        assert!(col.y >= 0.7 && col.y <= 1.0);
+        assert!(col.z >= 1.0);
+    }
+
+    #[test]
+    fn color_sky_gradient() {
+        let world = HitableList::new();
+        
+        // Ray pointing straight up should give bluer color
+        let ray_up = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        let col_up = color(ray_up, &world, 0);
+        
+        // Ray pointing down should give whiter color
+        let ray_down = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
+        let col_down = color(ray_down, &world, 0);
+        
+        // The gradient blends between white (1,1,1) at bottom and blue (0.5,0.7,1.0) at top
+        // So rays pointing down should have higher overall brightness
+        let brightness_up = col_up.x + col_up.y + col_up.z;
+        let brightness_down = col_down.x + col_down.y + col_down.z;
+        
+        // Down ray should be brighter (more white)
+        assert!(brightness_down > brightness_up);
+    }
+
+    #[test]
+    fn color_hit_returns_material_color() {
+        let mut world = HitableList::new();
+        world.add(Sphere::new(
+            Vec3::new(0.0, 0.0, -1.0),
+            0.5,
+            Box::new(Lambertian::new(Vec3::new(0.8, 0.3, 0.3)))
+        ));
+        
+        let ray = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
+        let col = color(ray, &world, 0);
+        
+        // Should return some color (not black, not pure sky)
+        assert!(col.x > 0.0 || col.y > 0.0 || col.z > 0.0);
+    }
+
+    #[test]
+    fn color_max_depth() {
+        let mut world = HitableList::new();
+        world.add(Sphere::new(
+            Vec3::new(0.0, 0.0, -1.0),
+            0.5,
+            Box::new(Lambertian::new(Vec3::new(1.0, 1.0, 1.0)))
+        ));
+        
+        let ray = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
+        
+        // At max depth, should return black
+        let col = color(ray, &world, 50);
+        
+        assert_eq!(col.x, 0.0);
+        assert_eq!(col.y, 0.0);
+        assert_eq!(col.z, 0.0);
+    }
+
+    #[test]
+    fn create_test_scene_works() {
+        let world = create_test_scene();
+        
+        // Should have multiple spheres
+        assert!(world.objects.len() > 0);
+    }
+
+    #[test]
+    fn create_book_scene_works() {
+        let world = create_book_scene();
+        
+        // Book scene should have many spheres
+        assert!(world.objects.len() > 100);
+    }
+
+    #[test]
+    fn create_book_scene_deterministic() {
+        let world1 = create_book_scene();
+        let world2 = create_book_scene();
+        
+        // Should create the same number of spheres each time
+        assert_eq!(world1.objects.len(), world2.objects.len());
+    }
+
+    #[test]
+    fn render_step_updates_samples() {
+        let world = create_test_scene();
+        let camera = Camera::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            90.0,
+            2.0,
+            0.0,
+            1.0
+        );
+        let mut image = Image::new(10, 10);
+        
+        assert_eq!(image.samples, 0);
+        
+        render_step(&world, &camera, &mut image);
+        
+        assert_eq!(image.samples, 1);
+    }
+
+    #[test]
+    fn render_step_accumulates_color() {
+        let world = HitableList::new(); // Empty world for consistent sky color
+        let camera = Camera::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            90.0,
+            2.0,
+            0.0,
+            1.0
+        );
+        let mut image = Image::new(10, 10);
+        
+        render_step(&world, &camera, &mut image);
+        
+        // After one render step, colors should be non-zero
+        let has_color = image.data.iter().any(|&pixel| 
+            pixel.x > 0.0 || pixel.y > 0.0 || pixel.z > 0.0
+        );
+        assert!(has_color);
+    }
+
+    #[test]
+    fn image_gamma_correction() {
+        let mut image = Image::new(1, 1);
+        
+        // Test gamma correction with known values
+        image.data[0] = Vec3::new(0.25, 0.5, 1.0);
+        image.samples = 1;
+        
+        let val = image.val(0);
+        
+        // sqrt(0.25) = 0.5, sqrt(0.5) ≈ 0.707, sqrt(1.0) = 1.0
+        assert!(approx_eq(val.x, 0.5, 0.001));
+        assert!(approx_eq(val.y, 0.707, 0.001));
+        assert!(approx_eq(val.z, 1.0, 0.001));
+    }
+}

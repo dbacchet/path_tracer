@@ -143,62 +143,229 @@ impl Ray {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
-    use super::Vec3;
-    use super::Ray;
+    // Helper function for floating point comparison
+    fn approx_eq(a: f32, b: f32, epsilon: f32) -> bool {
+        (a - b).abs() < epsilon
+    }
 
     #[test]
     fn vec3_creation() {
-        let v1 = super::Vec3::new(1.0,2.0,3.0);
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
         assert_eq!(v1.x, 1.0);
         assert_eq!(v1.y, 2.0);
         assert_eq!(v1.z, 3.0);
-
-        let v2 = v1 + super::Vec3::new(1.0, 1.0, 1.0);
-        assert_eq!(v2.x, 2.0);
-        assert_eq!(v2.y, 3.0);
-        assert_eq!(v2.z, 4.0);
-
-        let v3 = v1 * 2.0;
-        assert_eq!(v3.x, 2.0);
-        assert_eq!(v3.y, 4.0);
-        assert_eq!(v3.z, 6.0);
     }
 
-    use super::unit_vector;
-    use super::cross;
+    #[test]
+    fn vec3_addition() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(1.0, 1.0, 1.0);
+        let v3 = v1 + v2;
+        assert_eq!(v3.x, 2.0);
+        assert_eq!(v3.y, 3.0);
+        assert_eq!(v3.z, 4.0);
+    }
 
     #[test]
-    fn vec3_functions() {
-        let v1 = Vec3::new(3.0,0.0,0.0);
+    fn vec3_subtraction() {
+        let v1 = Vec3::new(5.0, 7.0, 9.0);
+        let v2 = Vec3::new(2.0, 3.0, 4.0);
+        let v3 = v1 - v2;
+        assert_eq!(v3.x, 3.0);
+        assert_eq!(v3.y, 4.0);
+        assert_eq!(v3.z, 5.0);
+    }
+
+    #[test]
+    fn vec3_scalar_multiplication() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        
+        // Test Vec3 * f32
+        let v2 = v1 * 2.0;
+        assert_eq!(v2.x, 2.0);
+        assert_eq!(v2.y, 4.0);
+        assert_eq!(v2.z, 6.0);
+        
+        // Test f32 * Vec3
+        let v3 = 3.0 * v1;
+        assert_eq!(v3.x, 3.0);
+        assert_eq!(v3.y, 6.0);
+        assert_eq!(v3.z, 9.0);
+    }
+
+    #[test]
+    fn vec3_scalar_division() {
+        let v1 = Vec3::new(6.0, 8.0, 10.0);
+        
+        // Test Vec3 / f32
+        let v2 = v1 / 2.0;
+        assert_eq!(v2.x, 3.0);
+        assert_eq!(v2.y, 4.0);
+        assert_eq!(v2.z, 5.0);
+        
+        // Test f32 / Vec3 (divides each component by the scalar)
+        let v3 = Vec3::new(6.0, 8.0, 10.0);
+        let v4 = 2.0 / v3;
+        assert_eq!(v4.x, 3.0);
+        assert_eq!(v4.y, 4.0);
+        assert_eq!(v4.z, 5.0);
+    }
+
+    #[test]
+    fn vec3_negation() {
+        let v1 = Vec3::new(1.0, -2.0, 3.0);
+        let v2 = -v1;
+        assert_eq!(v2.x, -1.0);
+        assert_eq!(v2.y, 2.0);
+        assert_eq!(v2.z, -3.0);
+    }
+
+    #[test]
+    fn vec3_length() {
+        let v1 = Vec3::new(3.0, 4.0, 0.0);
+        assert_eq!(v1.length(), 5.0);
+        
+        let v2 = Vec3::new(1.0, 1.0, 1.0);
+        assert!(approx_eq(v2.length(), 1.732050807, 0.0001));
+    }
+
+    #[test]
+    fn vec3_squared_length() {
+        let v1 = Vec3::new(3.0, 4.0, 0.0);
+        assert_eq!(v1.squared_length(), 25.0);
+        
+        let v2 = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!(v2.squared_length(), 14.0);
+    }
+
+    #[test]
+    fn unit_vector_test() {
+        let v1 = Vec3::new(3.0, 0.0, 0.0);
         let v2 = unit_vector(v1);
         assert_eq!(v2.x, 1.0);
         assert_eq!(v2.y, 0.0);
         assert_eq!(v2.z, 0.0);
-        let v1 = Vec3::new(1.0,0.0,0.0);
-        let v2 = Vec3::new(0.0,1.0,0.0);
+        assert!(approx_eq(v2.length(), 1.0, 0.0001));
+        
+        let v3 = Vec3::new(1.0, 2.0, 2.0);
+        let v4 = unit_vector(v3);
+        assert!(approx_eq(v4.length(), 1.0, 0.0001));
+    }
+
+    #[test]
+    fn dot_product() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(4.0, 5.0, 6.0);
+        let result = dot(v1, v2);
+        // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+        assert_eq!(result, 32.0);
+        
+        // Test perpendicular vectors (dot product should be 0)
+        let v3 = Vec3::new(1.0, 0.0, 0.0);
+        let v4 = Vec3::new(0.0, 1.0, 0.0);
+        assert_eq!(dot(v3, v4), 0.0);
+    }
+
+    #[test]
+    fn cross_product() {
+        let v1 = Vec3::new(1.0, 0.0, 0.0);
+        let v2 = Vec3::new(0.0, 1.0, 0.0);
+        
+        // Cross product of x and y should give z
         let v3 = cross(v1, v2);
         assert_eq!(v3.x, 0.0);
         assert_eq!(v3.y, 0.0);
         assert_eq!(v3.z, 1.0);
-        let v3 = cross(v2, v1);
-        assert_eq!(v3.x, 0.0);
-        assert_eq!(v3.y, 0.0);
-        assert_eq!(v3.z, -1.0);
-
+        
+        // Cross product in opposite order should give -z
+        let v4 = cross(v2, v1);
+        assert_eq!(v4.x, 0.0);
+        assert_eq!(v4.y, 0.0);
+        assert_eq!(v4.z, -1.0);
+        
+        // Test with non-unit vectors
+        let v5 = Vec3::new(2.0, 3.0, 4.0);
+        let v6 = Vec3::new(5.0, 6.0, 7.0);
+        let v7 = cross(v5, v6);
+        // (3*7 - 4*6, 4*5 - 2*7, 2*6 - 3*5) = (21-24, 20-14, 12-15) = (-3, 6, -3)
+        assert_eq!(v7.x, -3.0);
+        assert_eq!(v7.y, 6.0);
+        assert_eq!(v7.z, -3.0);
     }
 
     #[test]
-    fn ray() {
-        let r = Ray::new(Vec3::new(1.0,2.0,3.0), Vec3::new(1.0,1.0,1.0));
-        let p = r.point_at_parameter(1.0);
-        assert_eq!(p.x, 2.0);
-        assert_eq!(p.y, 3.0);
-        assert_eq!(p.z, 4.0);
-        let p = r.point_at_parameter(1.5);
-        assert_eq!(p.x, 2.5);
-        assert_eq!(p.y, 3.5);
-        assert_eq!(p.z, 4.5);
+    fn mul_component_test() {
+        let v1 = Vec3::new(2.0, 3.0, 4.0);
+        let v2 = Vec3::new(5.0, 6.0, 7.0);
+        let v3 = mul_component(v1, v2);
+        assert_eq!(v3.x, 10.0);
+        assert_eq!(v3.y, 18.0);
+        assert_eq!(v3.z, 28.0);
+    }
+
+    #[test]
+    fn ray_creation() {
+        let origin = Vec3::new(1.0, 2.0, 3.0);
+        let direction = Vec3::new(1.0, 0.0, 0.0);
+        let r = Ray::new(origin, direction);
+        assert_eq!(r.origin.x, 1.0);
+        assert_eq!(r.origin.y, 2.0);
+        assert_eq!(r.origin.z, 3.0);
+        assert_eq!(r.direction.x, 1.0);
+        assert_eq!(r.direction.y, 0.0);
+        assert_eq!(r.direction.z, 0.0);
+    }
+
+    #[test]
+    fn ray_point_at_parameter() {
+        let r = Ray::new(Vec3::new(1.0, 2.0, 3.0), Vec3::new(1.0, 1.0, 1.0));
+        
+        let p0 = r.point_at_parameter(0.0);
+        assert_eq!(p0.x, 1.0);
+        assert_eq!(p0.y, 2.0);
+        assert_eq!(p0.z, 3.0);
+        
+        let p1 = r.point_at_parameter(1.0);
+        assert_eq!(p1.x, 2.0);
+        assert_eq!(p1.y, 3.0);
+        assert_eq!(p1.z, 4.0);
+        
+        let p2 = r.point_at_parameter(1.5);
+        assert_eq!(p2.x, 2.5);
+        assert_eq!(p2.y, 3.5);
+        assert_eq!(p2.z, 4.5);
+        
+        let p3 = r.point_at_parameter(-1.0);
+        assert_eq!(p3.x, 0.0);
+        assert_eq!(p3.y, 1.0);
+        assert_eq!(p3.z, 2.0);
+    }
+
+    #[test]
+    fn vec3_zero() {
+        let v = Vec3::new(0.0, 0.0, 0.0);
+        assert_eq!(v.length(), 0.0);
+        assert_eq!(v.squared_length(), 0.0);
+    }
+
+    #[test]
+    fn combined_operations() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(4.0, 5.0, 6.0);
+        
+        // Test (v1 + v2) * 2.0
+        let result = (v1 + v2) * 2.0;
+        assert_eq!(result.x, 10.0);
+        assert_eq!(result.y, 14.0);
+        assert_eq!(result.z, 18.0);
+        
+        // Test negation with addition
+        let v3 = -v1 + v2;
+        assert_eq!(v3.x, 3.0);
+        assert_eq!(v3.y, 3.0);
+        assert_eq!(v3.z, 3.0);
     }
 }
 
