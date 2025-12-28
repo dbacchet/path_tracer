@@ -3,24 +3,28 @@ mod camera;
 mod material;
 mod objects;
 mod path_tracer;
+mod web_viewer;
 
 use pt_math::Vec3;
 use camera::Camera;
 use path_tracer::{Image, render_step, create_book_scene};
+use objects::HitableList;
+use std::sync::{Arc, Mutex};
 
 extern crate getopts;
 use getopts::Options;
 extern crate minifb;
-use minifb::{Key, WindowOptions, Window};
 extern crate indicatif;
-use indicatif::ProgressBar;
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} FILE [options]", program);
     print!("{}", opts.usage(&brief));
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    
     let args: Vec<String> = std::env::args().collect();
 
     // parse command line options
@@ -30,6 +34,8 @@ fn main() {
     opts.optopt("w", "width", "image width (default=640)", "");
     opts.optopt("h", "height", "image height (default=360)", "");
     opts.optopt("s", "samples", "number of samples (default=10)", "");
+    opts.optopt("p", "port", "web server port (default=3030)", "");
+    opts.optflag("", "web", "enable web viewer instead of window");
     opts.optflag("", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
@@ -46,7 +52,14 @@ fn main() {
     let width = matches.opt_get_default::<u32>("w", 640).expect("invalid width");
     let height = matches.opt_get_default::<u32>("h", 360).expect("invalid heigh");
     let samples = matches.opt_get_default::<u32>("s", 10).expect("invalid number of samples");
-    println!("sample path tracing. Rendering scene...");
+    let port = matches.opt_get_default::<u16>("p", 3030).expect("invalid port");
+    let use_web = matches.opt_present("web");
+    
+    println!("╔═══════════════════════════════════════════════════════════════╗");
+    println!("║           Path Tracer v{}                              ║", VERSION);
+    println!("╚═══════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("Rendering scene...");
     // create empty image
     let mut image = Image::new(width, height);
     // camera
@@ -61,11 +74,85 @@ fn main() {
     // create scene
     let world = create_book_scene();
     // let world = create_test_scene();
+    
+    if use_web {
+        // Web viewer mode
+        println!("Starting in web viewer mode...");
+        
+        let shared_image = Arc::new(Mutex::new(image));
+        let shared_image_clone = shared_image.clone();
+        
+        // Start web server in a separate task with abort handle
+        let server_handle = tokio::spawn(async move {
+            web_viewer::start_web_server(shared_image_clone, port).await;
+        });
+        
+        // Give the web server a moment to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        
+        // Render loop
+        use indicatif::ProgressBar;
+        let bar = ProgressBar::new(samples as u64);
+        bar.set_style(indicatif::ProgressStyle::default_bar()
+                      .template("[{elapsed}] [{wide_bar:.cyan/blue}] {pos}/{len} ({eta} rem.)")
+                      .progress_chars("##-"));
+        
+        for _s in 0..samples {
+            {
+                let mut img = shared_image.lock().unwrap();
+                render_step(&world, &camera, &mut img);
+            }
+            bar.inc(1);
+            // Small delay to allow web requests to be processed
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        }
+        bar.finish();
+        
+        println!("...Done!");
+        println!("Rendering complete. Image saved to {}", output_filename);
+        
+        // Save final image
+        let final_image = shared_image.lock().unwrap();
+        final_image.save(&output_filename);
+        drop(final_image); // Release the lock
+        
+        // Keep server running
+        println!("Web server still running at http://localhost:{}", port);
+        println!("Press Ctrl+C to exit.");
+        
+        // Wait for Ctrl+C with a timeout-based approach
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                println!("\nShutting down gracefully...");
+            }
+            _ = server_handle => {
+                println!("\nServer stopped unexpectedly.");
+            }
+        }
+        
+        println!("Goodbye!");
+        
+    } else {
+        // Original window mode
+        create_window_viewer(&world, &camera, &mut image, samples, &output_filename);
+    }
+}
+
+fn create_window_viewer(
+    world: &HitableList,
+    camera: &Camera,
+    image: &mut Image,
+    samples: u32,
+    output_filename: &str,
+) {
+    use minifb::{Key, WindowOptions, Window};
+    use indicatif::ProgressBar;
+    
     // create window with live framebuffer 
-    let mut buffer: Vec<u32> = vec![0; (width * height) as usize];
+    let mut buffer: Vec<u32> = vec![0; (image.width * image.height) as usize];
     let mut window = Window::new("Test - ESC to exit",
-                                 width as usize,
-                                 height as usize,
+                                 image.width as usize,
+                                 image.height as usize,
                                  WindowOptions::default()).unwrap_or_else(|e| { panic!("{}", e); });
     // progress bar
     let bar = ProgressBar::new(samples as u64);
@@ -75,7 +162,7 @@ fn main() {
     // render image and update  window
     for _s in 0..samples {
         if window.is_open() && !window.is_key_down(Key::Escape) {
-            render_step(&world, &camera, &mut image);
+            render_step(&world, &camera, image);
             // update framebuffer
             for j in 0..image.height {
                 for i in 0..image.width {

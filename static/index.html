@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Path Tracer - Live View</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.active {
+            background: rgba(76, 175, 80, 0.5);
+            border-color: rgba(76, 175, 80, 0.7);
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .status.disconnected {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            opacity: 0.8;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .loading::after {
+            content: '...';
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Path Tracer</h1>
+        <p class="subtitle">Real-time Rendering Viewer</p>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Resolution</div>
+                <div class="stat-value" id="resolution">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Samples</div>
+                <div class="stat-value" id="samples">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Update Rate</div>
+                <div class="stat-value" id="fps">0 Hz</div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <button id="toggleBtn" class="active">⏸ Pause</button>
+            <button id="refreshBtn">🔄 Refresh</button>
+        </div>
+
+        <div class="status connected" id="status">
+            ● Connected - Updating...
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const samplesEl = document.getElementById('samples');
+        const resolutionEl = document.getElementById('resolution');
+        const fpsEl = document.getElementById('fps');
+        const statusEl = document.getElementById('status');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+
+        let isRunning = true;
+        let lastUpdate = Date.now();
+        let updateCount = 0;
+        let lastSample = 0;
+
+        async function fetchImage() {
+            try {
+                const response = await fetch('/api/image');
+                const data = await response.json();
+                
+                // Set canvas size if changed
+                if (canvas.width !== data.width || canvas.height !== data.height) {
+                    canvas.width = data.width;
+                    canvas.height = data.height;
+                    resolutionEl.textContent = `${data.width}×${data.height}`;
+                }
+
+                // Update samples
+                samplesEl.textContent = data.samples;
+
+                // Calculate update rate
+                const now = Date.now();
+                updateCount++;
+                if (now - lastUpdate >= 1000) {
+                    fpsEl.textContent = `${updateCount} Hz`;
+                    updateCount = 0;
+                    lastUpdate = now;
+                }
+
+                // Draw image
+                const imageData = ctx.createImageData(data.width, data.height);
+                for (let i = 0; i < data.pixels.length; i++) {
+                    imageData.data[i * 4 / 3 * 4 + (i % 3)] = data.pixels[i];
+                    if (i % 3 === 2) {
+                        imageData.data[Math.floor(i / 3) * 4 + 3] = 255; // Alpha
+                    }
+                }
+
+                // Copy pixel data
+                for (let i = 0; i < data.pixels.length; i += 3) {
+                    const pixelIndex = Math.floor(i / 3);
+                    imageData.data[pixelIndex * 4 + 0] = data.pixels[i];     // R
+                    imageData.data[pixelIndex * 4 + 1] = data.pixels[i + 1]; // G
+                    imageData.data[pixelIndex * 4 + 2] = data.pixels[i + 2]; // B
+                    imageData.data[pixelIndex * 4 + 3] = 255;                 // A
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                // Update status
+                statusEl.className = 'status connected';
+                statusEl.textContent = '● Connected - Updating...';
+                
+            } catch (error) {
+                console.error('Error fetching image:', error);
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '● Disconnected - Retrying...';
+            }
+        }
+
+        function update() {
+            if (isRunning) {
+                fetchImage();
+            }
+            // Continue polling every 100ms
+            setTimeout(update, 100);
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            if (isRunning) {
+                toggleBtn.textContent = '⏸ Pause';
+                toggleBtn.classList.add('active');
+            } else {
+                toggleBtn.textContent = '▶ Resume';
+                toggleBtn.classList.remove('active');
+            }
+        });
+
+        refreshBtn.addEventListener('click', () => {
+            fetchImage();
+        });
+
+        // Start updating
+        update();
+    </script>
+</body>
+</html>
+
