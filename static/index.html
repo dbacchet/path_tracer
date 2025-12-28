@@ -184,6 +184,10 @@
                 <div class="stat-label">Update Rate</div>
                 <div class="stat-value" id="fps">0 Hz</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Connected Clients</div>
+                <div class="stat-value" id="connections">-</div>
+            </div>
         </div>
 
         <div class="canvas-container">
@@ -206,6 +210,7 @@
         const samplesEl = document.getElementById('samples');
         const resolutionEl = document.getElementById('resolution');
         const fpsEl = document.getElementById('fps');
+        const connectionsEl = document.getElementById('connections');
         const statusEl = document.getElementById('status');
         const toggleBtn = document.getElementById('toggleBtn');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -229,6 +234,11 @@
 
                 // Update samples
                 samplesEl.textContent = data.samples;
+                
+                // Update connections if available
+                if (data.connections !== undefined) {
+                    connectionsEl.textContent = data.connections;
+                }
 
                 // Calculate update rate
                 const now = Date.now();

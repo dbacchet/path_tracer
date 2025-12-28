@@ -1,8 +1,8 @@
 # Path Tracer in Rust
 
-**Version 1.0.0**
+**Version 1.1.0**
 
-A simple path tracer implemented in Rust with real-time web visualization.
+A simple path tracer implemented in Rust with real-time web visualization and concurrent viewer support.
 
 This project implements a _very_ simple path tracer, done with the main purpose of learning Rust. I used the [Ray Tracing in a Weekend](http://in1weekend.blogspot.com/2016/01/ray-tracing-in-one-weekend.html) series as a reference. I strongly recommend buying those books; they're a fantastic and very well written intro to ray tracing.
 
@@ -12,7 +12,9 @@ This project implements a _very_ simple path tracer, done with the main purpose 
 
 - **Path tracing** with physically-based rendering
 - **Real-time web viewer** to watch rendering progress in your browser (NEW!)
-- **Traditional desktop window** viewer (original mode)
+- **Traditional desktop window** viewer
+- **Concurrent viewers** - Run both window and web viewers simultaneously! (NEW!)
+- **Multiple remote clients** - Multiple browsers can connect at once (NEW!)
 - Multiple material types: Lambertian (diffuse), Metal, and Dielectric (glass)
 - Depth of field / bokeh effects
 - Progressive rendering with sample accumulation
@@ -21,25 +23,36 @@ This project implements a _very_ simple path tracer, done with the main purpose 
 
 ## Quick Start
 
-### Web Viewer Mode (Recommended!)
+### Both Viewers (Recommended!)
 
-Start the path tracer with the web viewer:
+Run with both desktop window and web viewer simultaneously:
 
 ```bash
 cargo run --release -- -o output.png --web
 ```
 
+- Desktop window opens automatically
+- Web viewer at: **http://localhost:3030**
+- Multiple browsers can connect simultaneously
+- Close window or press Ctrl+C to exit
+
+### Web Viewer Only
+
+Perfect for headless servers or remote viewing:
+
+```bash
+cargo run --release -- -o output.png --web --no-window
+```
+
 Then open your browser to: **http://localhost:3030**
 
-You'll see the rendering progress in real-time with:
-- Live image updates
-- Current sample count
-- Update rate (Hz)
-- Pause/Resume controls
+- Multiple clients can connect
+- See real-time client count
+- Press Ctrl+C to exit
 
-### Traditional Window Mode
+### Traditional Window Only
 
-Run with the original desktop window viewer:
+Run with just the desktop window viewer:
 
 ```bash
 cargo run --release -- -o output.png
@@ -50,17 +63,23 @@ Press ESC to close the window early.
 ## Usage Examples
 
 ```bash
-# Quick test with web viewer
-cargo run --release -- -o test.png --web -w 320 -h 180 -s 5
+# Both viewers simultaneously (watch in window + browser)
+cargo run --release -- -o output.png --web
 
-# High quality render
+# Web only with custom port
+cargo run --release -- -o output.png --web --no-window -p 8080
+
+# High quality render with both viewers
 cargo run --release -- -o scene.png --web -w 1920 -h 1080 -s 500
 
-# Custom port for web viewer
-cargo run --release -- -o output.png --web -p 8080
+# Quick test with both viewers
+cargo run --release -- -o test.png --web -w 320 -h 180 -s 5
 
-# Custom resolution
-cargo run --release -- -o output.png --web -w 800 -h 600
+# Window only (original mode)
+cargo run --release -- -o output.png -w 640 -h 360
+
+# Test multiple clients (open multiple browser tabs!)
+cargo run --release -- -o output.png --web --no-window
 ```
 
 ## Command Line Options
@@ -71,9 +90,17 @@ cargo run --release -- -o output.png --web -w 800 -h 600
 -h <HEIGHT>        Image height (default: 360)
 -s <SAMPLES>       Number of samples per pixel (default: 10)
 -p <PORT>          Web server port (default: 3030)
---web              Enable web viewer instead of window
+--web              Enable web viewer (works with window)
+--no-window        Disable desktop window viewer
 --help             Print help menu
 ```
+
+**Viewer Combinations:**
+- `--web` alone: Both desktop window AND web viewer
+- `--web --no-window`: Web viewer only
+- No flags: Desktop window only (original mode)
+
+**Note:** At least one viewer must be enabled!
 
 ## Running Tests
 

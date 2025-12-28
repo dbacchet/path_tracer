@@ -1,6 +1,6 @@
 [package]
 name = "path_tracer"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Davide Bacchet <davide.bacchet@gmail.com>"]
 edition = "2018"
 

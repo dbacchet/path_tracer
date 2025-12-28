@@ -1,5 +1,75 @@
 # Path Tracer - Release Notes
 
+## Version 1.1.0 (December 2025) - Concurrent Viewers
+
+### 🎉 Major New Feature: Concurrent Viewers
+
+Run **both desktop window and web viewers simultaneously**! Watch your render in a local window while multiple remote clients connect via browser.
+
+**New Capabilities:**
+- ✨ **Simultaneous viewing** - Desktop window + web browser at the same time
+- 🌍 **Multiple remote clients** - Unlimited browser connections simultaneously
+- 📊 **Connection tracking** - See how many clients are connected
+- 🔧 **Flexible configuration** - Choose which viewers to enable
+- 🧵 **Multi-threaded** - Window viewer runs in separate thread for smooth updates
+
+### Usage
+
+**Both viewers (recommended):**
+```bash
+cargo run --release -- -o output.png --web
+# Desktop window opens + web at http://localhost:3030
+```
+
+**Web only:**
+```bash
+cargo run --release -- -o output.png --web --no-window
+# Perfect for headless servers
+```
+
+**Window only:**
+```bash
+cargo run --release -- -o output.png
+# Original mode
+```
+
+### New Command-Line Options
+
+- `--no-window` - Disable desktop window viewer
+- Modified `--web` - Now works alongside window viewer (not instead of)
+
+### Technical Implementation
+
+**Architecture Changes:**
+- Refactored `main.rs` for concurrent viewer support
+- Window viewer runs in dedicated thread via `std::thread`
+- Web server runs in tokio task (unchanged)
+- Both viewers read from shared `Arc<Mutex<Image>>`
+- Main thread handles rendering loop
+- Graceful shutdown for all viewer combinations
+
+**Window Viewer Updates:**
+- Continuously polls shared image and updates display
+- ~30 FPS update rate with manual sleep
+- Runs until ESC pressed or window closed
+- Thread-safe access to image buffer
+
+**Web Viewer Enhancements:**
+- Added connection counter using `AtomicUsize`
+- Tracks total page loads
+- Displays connected client count in UI
+- Supports unlimited simultaneous connections
+
+### Benefits
+
+1. **Best of Both Worlds** - Local preview + remote monitoring
+2. **Team Collaboration** - Multiple people can watch same render
+3. **Flexibility** - Choose the viewers you need
+4. **Performance** - Minimal overhead from multiple viewers
+5. **Compatibility** - All original modes still work
+
+---
+
 ## Version 1.0.0 (December 2025)
 
 ### Major Features
